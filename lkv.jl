@@ -8,8 +8,12 @@ function lotka_volterra!(dx, x, p, t)
 end
 
 
-function sample_lotka_volterra(x₀, n, T, α, β, δ, γ)
-    sample_points = rand(Float64, n) * T
+function sample_lotka_volterra(x₀, n, T, α, β, δ, γ; train=false)
+    if train
+        sample_points = rand(Float64, n) * T
+    else
+        sample_points = LinRange(0, T, n)
+    end
     tspan = (0.0, T)
     p = [α, β, δ, γ]
     prob = ODEProblem(lotka_volterra!, x₀, tspan, p)
