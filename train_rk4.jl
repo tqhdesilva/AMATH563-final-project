@@ -35,7 +35,7 @@ opt = Descent(0.0001)
 predict(t, x) = rk4(f, t, x)
 
 
-for i in 1:100
+for i in 1:800
     for (x₀, y, T) in train_loader
         t = hcat(LinRange.(0, T, 100)...)
         grad = gradient(θ) do 
