@@ -51,13 +51,6 @@ end
 
 println(est_params)
 
-fc_model = Chain(
-    Dense(2, 16, relu),
-    Dense(16, 32, relu),
-    Dense(32, 16, relu),
-    Dense(16, 2)
-)
-
 p1 = plot(
     lkv_train_samples.t,
     transpose(lkv_train_samples),
