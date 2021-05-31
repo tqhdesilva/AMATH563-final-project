@@ -8,12 +8,12 @@ include("lkv.jl")
 
 lkv_ic = [0.8, 0.4]
 true_params = [1.1, 0.4, 0.1, 0.4]
-lkv_train_samples = sample_lotka_volterra(lkv_ic, 50, 100., true_params...; train=true)
-lkv_test_samples = sample_lotka_volterra(lkv_ic, 50, 100., true_params...)
+lkv_train_samples = sample_lotka_volterra(lkv_ic, 200, 100., true_params...; train=true)
+lkv_test_samples = sample_lotka_volterra(lkv_ic, 500, 100, true_params...)
 
 lkv_train_tuple = (
-    lkv_train_samples[1:end - 1],
-    lkv_train_samples[2:end],
+    lkv_train_samples[:, 1:end - 1],
+    lkv_train_samples[:, 2:end],
     lkv_train_samples.t[2:end] .- lkv_train_samples.t[1:end - 1]
 )
 
@@ -21,29 +21,59 @@ train_loader = DataLoader(lkv_train_tuple; batchsize=16, shuffle=true)
 test_loader = DataLoader(lkv_train_samples; batchsize=32, shuffle=false)
 
 est_params = rand(4)
-θ = params(est_params)
+println(est_params)
+θ = Flux.params(est_params)
 
-f(x, α, β, δ, γ) = [
-    α * x[1] - β * x[1] * x[2],
-    δ * x[1] * x[2] - γ * x[2]
-]
+f(x, α, β, δ, γ) = hcat(
+    α .* x[:, 1] .- β .* x[:, 1] .* x[:, 2],
+    δ .* x[:, 1] .* x[:, 2] .- γ .* x[:, 2]
+)
 
-f(x) = f(x, est_params...)
-mse_loss(x̂, x) = mean(sum((x̂ .- x).^2, dims=2))
+f(t, x) = f(x, est_params...)
 
-opt = Descent(0.1)
-for i in 1:10
-    for (x₀, xₜ, T) in train_loader
-        t = LinRange.(0, T, 100)
-        x̂ₜ = collect(map((t, x) -> rk4(f, t, x), t, eachrow(x₀)))
-        grad = gradient(mse_loss(x̂ₜ, xₜ), θ)
-        update!(opt, θ, grad)
+opt = Descent(0.0001)
+predict(t, x) = rk4(f, t, x)
+
+
+for i in 1:100
+    for (x₀, y, T) in train_loader
+        t = hcat(LinRange.(0, T, 100)...)
+        grad = gradient(θ) do 
+            loss = Flux.Losses.mse(predict(t, x₀), y)
+            return loss
+        end
+        for p in θ
+            update!(opt, p, [grad[p]...])
+        end
     end
 end
+
+println(est_params)
 
 fc_model = Chain(
     Dense(2, 16, relu),
     Dense(16, 32, relu),
     Dense(32, 16, relu),
     Dense(16, 2)
+)
+
+p1 = plot(
+    lkv_train_samples.t,
+    transpose(lkv_train_samples),
+    title="LKV Model",
+    label=["x₁ train" "x₂ train"],
+    seriestype=:scatter
+)
+plot!(
+    p1,
+    lkv_test_samples.t,
+    transpose(lkv_test_samples),
+    label=["actual x₁" "actual x₂"]
+)
+lkv_est_samples = sample_lotka_volterra(lkv_ic, 500, 100, est_params...)
+plot!(
+    p1,
+    lkv_est_samples.t,
+    transpose(lkv_est_samples),
+    label=["estimated x₁" "estimated x₂"]
 )
