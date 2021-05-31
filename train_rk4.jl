@@ -43,6 +43,7 @@ for i in 1:800
             return loss
         end
         for p in θ
+            # TODO figure out why grad[est_params] is a tuple
             update!(opt, p, [grad[p]...])
         end
     end
