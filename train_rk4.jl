@@ -57,7 +57,7 @@ println(est_params)
 p1 = plot(
     lkv_train_samples.t,
     transpose(lkv_train_samples),
-    title="LKV Model",
+    title="LKV Model using LKV equation",
     label=["x₁ train" "x₂ train"],
     seriestype=:scatter
 )
@@ -105,7 +105,7 @@ end
 p1 = plot(
     lkv_train_samples.t,
     transpose(lkv_train_samples),
-    title="LKV Model",
+    title="LKV Model using NN",
     label=["x₁ train" "x₂ train"],
     seriestype=:scatter
 )
