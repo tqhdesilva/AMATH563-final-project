@@ -10,5 +10,5 @@ function rk4(f, t, x₀)
         k₄ = f(tᵢ .+ h, xᵢ .+ h .* k₃)
         xᵢ = xᵢ .+ 1 ./ 6 .* h .* (k₁ .+ 2 .* k₂ .+ 2 .* k₃ .+ k₄)
     end
-    return collect(transpose(xᵢ))
+    return transpose(xᵢ)
 end

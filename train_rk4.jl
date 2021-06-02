@@ -19,7 +19,7 @@ lkv_train_tuple = (
 )
 
 train_loader = DataLoader(lkv_train_tuple; batchsize=16, shuffle=true)
-test_loader = DataLoader(lkv_train_samples; batchsize=32, shuffle=false)
+test_loader = DataLoader(lkv_train_samples; batchsize=64, shuffle=false)
 
 ## Train rk4 model to learn lkv params
 est_params = rand(4)
@@ -81,17 +81,18 @@ fc = Chain(
     Dense(16, 32, relu),
     Dense(32, 16, relu),
     Dense(16, 2)
-)
+) |> gpu
 θ = params(fc)
 f(t, x) = fc(x')'
 
-opt = Descent(0.0001)
+opt = Descent(0.005)
 predict(t, x) = rk4(f, t, x)
 
-# TODO get CUDA working
-for i in 1:10
-    for (x₀, y, T) in train_loader
-        t = hcat(LinRange.(0, T, 100)...)
+function train!(loader)
+    for (x₀, y, T) in loader
+        t = hcat(LinRange.(0, T, 100)...) |> gpu
+        x₀ = x₀ |> gpu
+        y = y |> gpu
         grad = gradient(θ) do 
             loss = Flux.Losses.mse(predict(t, x₀), y)
             return loss
@@ -100,6 +101,9 @@ for i in 1:10
         update!(opt, θ, grad)
     end
 end
+@Flux.epochs 30 train!(train_loader)
+
+fc = cpu(fc)
 
 p1 = plot(
     lkv_train_samples.t,
