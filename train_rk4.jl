@@ -81,18 +81,16 @@ fc = Chain(
     Dense(16, 32, relu),
     Dense(32, 16, relu),
     Dense(16, 2)
-) |> gpu
+)
 θ = params(fc)
 f(t, x) = fc(x')'
 
-opt = Descent(0.005)
+opt = ADAMW(0.0001)
 predict(t, x) = rk4(f, t, x)
 
 function train!(loader)
     for (x₀, y, T) in loader
-        t = hcat(LinRange.(0, T, 100)...) |> gpu
-        x₀ = x₀ |> gpu
-        y = y |> gpu
+        t = hcat(LinRange.(0, T, 100)...)
         grad = gradient(θ) do 
             loss = Flux.Losses.mse(predict(t, x₀), y)
             return loss
@@ -101,9 +99,8 @@ function train!(loader)
         update!(opt, θ, grad)
     end
 end
-@Flux.epochs 30 train!(train_loader)
+@Flux.epochs 800 train!(train_loader)
 
-fc = cpu(fc)
 
 p1 = plot(
     lkv_train_samples.t,
