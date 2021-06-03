@@ -15,11 +15,10 @@ struct Encoder
     end
 end
 
-# TODO will need to batch time series together
-# each batch will be a vector length N(i.e. N time steps)
-function (e::Encoder)(x::Vector{Matrix{Float32}})
-    # x is vector of xdim x batch
+function (e::Encoder)(x::Array{Float32, 3})
+    # x is vector of tsteps x xdim x batch
     # length(x) is # timesteps
+    x = Flux.unstack(x, 1)
     Flux.reset!(e.rnn_network)
     out = e.rnn_network.(x)[end] # 2 * zdim x batch
     μ = out[1:e.zdim, :]
@@ -66,8 +65,8 @@ struct LatentODE
     vae::VAE
 end
 
-function(::LatentODE)(x::Vector{Array{Float64}}, args..; kwargs)
-    # run
+function(::LatentODE)(x::Array{Float32, 3}, args..; kwargs)
+    # x is tsteps x xdim x batchsize
     # return ODE solution
 end
 
