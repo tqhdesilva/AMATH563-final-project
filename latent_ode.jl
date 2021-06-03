@@ -15,16 +15,16 @@ struct Encoder
     end
 end
 
-function (e::Encoder)(x::Array{Float32, 3})
+function (e::Encoder)(x::Array{Float32,3})
     # x is vector of tsteps x xdim x batch
     # length(x) is # timesteps
-    x = Flux.unstack(x, 1)
+    x = reverse(Flux.unstack(x, 1))
     Flux.reset!(e.rnn_network)
     out = e.rnn_network.(x)[end] # 2 * zdim x batch
     μ = out[1:e.zdim, :]
     logσ = out[e.zdim + 1:end, :]
     z = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
-    return z
+    return z # zdim x batchsize
 end
 
 struct Decoder
@@ -44,7 +44,7 @@ end
 
 function (d::Decoder)(z::Matrix{Float32})
     # z is shape zdim x batchsize
-    return d.network(z)
+    return d.network(z) # xdim x batchsize
 end
 
 struct VAE
@@ -65,13 +65,17 @@ struct LatentODE
     vae::VAE
 end
 
-function(::LatentODE)(x::Array{Float32, 3}, args..; kwargs)
+function (l::LatentODE)(x::Array{Float32,3}, t::Matrix{Float32}, tspan::Vector{Tuple{Float32,Float32}})
+    # TODO ensure each tspan contains all t
     # x is tsteps x xdim x batchsize
-    # return ODE solution
+    # t is tsteps x batchsize
+    # return ODE problem
+    z₀ = l.vae.encoder(x)
+
+end
+
+function train!(model::LatentODE, x::Array{Float32,3})
 end
 
 function elbo()
 end
-
-using DifferentialEquations
-solve
