@@ -1,9 +1,6 @@
 using DifferentialEquations, Flux
 
 
-# TODO
-# - implement VAE with RNN encoder
-
 struct Encoder
     zdim::Int
     xdim::Int
@@ -15,16 +12,15 @@ struct Encoder
     end
 end
 
-function (e::Encoder)(x::Array{Float32,3})
-    # x is vector of tsteps x xdim x batch
-    # length(x) is # timesteps
-    x = reverse(Flux.unstack(x, 1))
+function (e::Encoder)(x::Matrix{Float32})
+    # x is vector of tsteps x xdim
+    x = reverse(Flux.unstack(x, 2))
     Flux.reset!(e.rnn_network)
-    out = e.rnn_network.(x)[end] # 2 * zdim x batch
-    μ = out[1:e.zdim, :]
-    logσ = out[e.zdim + 1:end, :]
+    out = e.rnn_network.(x)[end] # 2 * zdim
+    μ = out[1:e.zdim]
+    logσ = out[e.zdim + 1:end]
     z = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
-    return z # zdim x batchsize
+    return z
 end
 
 struct Decoder
@@ -42,9 +38,8 @@ struct Decoder
     end
 end
 
-function (d::Decoder)(z::Matrix{Float32})
-    # z is shape zdim x batchsize
-    return d.network(z) # xdim x batchsize
+function (d::Decoder)(z::Vector{Float32})
+    return d.network(z)
 end
 
 struct VAE
@@ -63,15 +58,30 @@ end
 struct LatentODE
     f::Function
     vae::VAE
+    function LatentODE(xdim::Int, zdim::Int, hdim::Int)
+        fc = Chain(
+            Dense(zdim, 32, relu),
+            Dense(32, 32, relu)
+            Dense(32, xdim)
+        )
+        f(x, p, t) = fc(x)
+        vae = VAE(xdim, zdim, hdim)
+        new(f, vae)
+    end
 end
 
-function (l::LatentODE)(x::Array{Float32,3}, t::Matrix{Float32}, tspan::Vector{Tuple{Float32,Float32}})
-    # TODO ensure each tspan contains all t
-    # x is tsteps x xdim x batchsize
-    # t is tsteps x batchsize
-    # return ODE problem
-    z₀ = l.vae.encoder(x)
 
+function (l::LatentODE)(
+    x::Matrix{Float32},
+    t::Vector{Float32},
+    tspan::Tuple{Number,Number}
+)
+    tspan = (max(tspan[1], t[1]), max(tspan[2], t[end]))
+    z₀ = l.vae.encoder(x)
+    prob = ODEProblem(l.f, z₀, tspan)
+    sol = solve(prob)
+    lode_sol(t) = l.vae.decoder(convert(Vector{Float32}, sol(t)))
+    return lode_sol
 end
 
 function train!(model::LatentODE, x::Array{Float32,3})
