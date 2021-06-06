@@ -1,4 +1,4 @@
-using DifferentialEquations, Flux
+using DifferentialEquations, Flux, DiffEqFlux
 using Flux.Losses:logitbinarycrossentropy
 
 
@@ -66,18 +66,17 @@ struct VAE
 end
 
 struct LatentODE
-    f::Function
+    dzdt::Chain
     vae::VAE
     β::AbstractFloat
     function LatentODE(xdim::Int, zdim::Int, hdim::Int, β::AbstractFloat=1.0)
-        fc = Chain(
+        dzdt = Chain(
             Dense(zdim, 32, relu),
             Dense(32, 32, relu),
             Dense(32, zdim)
         )
-        f(x, p, t) = fc(x)
         vae = VAE(xdim, zdim, hdim)
-        new(f, vae, β)
+        new(dzdt, vae, β)
     end
 end
 
@@ -90,8 +89,8 @@ function (l::LatentODE)(
     tspan = (max(tspan[1], t[1]), max(tspan[2], t[end]))
     μ, logσ = l.vae.encoder(x)
     z₀ = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
-    prob = ODEProblem(l.f, z₀, tspan)
-    sol = solve(prob)
+    node = NeuralODE(l.dzdt, tspan)
+    sol = node(z₀)
     lode_sol(t) = l.vae.decoder(convert(Vector{Float32}, sol(t)))
     return lode_sol
 end
@@ -101,8 +100,8 @@ function elbo(model::LatentODE, x::Array{Float32,3}, t::Matrix{Float32})
     tspans = [(t[1, i], t[end, i]) for i in 1:size(x)[end]]
     μ, logσ = model.vae.encoder(x)
     z₀ = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
-    probs = ODEProblem.(model.f, Flux.unstack(z₀, 2), tspans)
-    sols = [solve(prob, saveat=tᵢ) for (prob, tᵢ) in zip(probs, Flux.unstack(t, 2))]
+    probs = [NeuralODE(model.dzdt, tspan; saveat=tᵢ) for (tspan, tᵢ) in zip(tspans, Flux.unstack(t, 2))]
+    sols = [prob(z) for (prob, z) in zip(probs, Flux.unstack(z₀, 2))]
     x̂s = Flux.stack([model.vae.decoder(Flux.stack(sol.u, 2)) for sol in sols], 3)
     logp_x_z = - sum(logitbinarycrossentropy.(x̂s, x)) / batchsize # expectation
     kl_q_p = 0.5f0 * sum(@. (exp(logσ) + μ^2 - logσ - 1f0)) / batchsize
