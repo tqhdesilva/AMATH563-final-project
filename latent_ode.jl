@@ -100,12 +100,26 @@ function elbo(model::LatentODE, x::Array{Float32,3}, t::Matrix{Float32})
     tspans = [(t[1, i], t[end, i]) for i in 1:size(x)[end]]
     μ, logσ = model.vae.encoder(x)
     z₀ = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
-    probs = [NeuralODE(model.dzdt, tspan; saveat=tᵢ) for (tspan, tᵢ) in zip(tspans, Flux.unstack(t, 2))]
-    sols = [prob(z) for (prob, z) in zip(probs, Flux.unstack(z₀, 2))]
+    probs = [NeuralODE(model.dzdt, tspans[i]; saveat=t[:, i]) for i in 1:length(tspans)]
+    sols = [probs[i](z₀[:, i]) for i in 1:length(probs)]
     x̂s = Flux.stack([model.vae.decoder(Flux.stack(sol.u, 2)) for sol in sols], 3)
     logp_x_z = - sum(logitbinarycrossentropy.(x̂s, x)) / batchsize # expectation
     kl_q_p = 0.5f0 * sum(@. (exp(logσ) + μ^2 - logσ - 1f0)) / batchsize
     elbo = logp_x_z - model.β * kl_q_p
     # TODO maybe add regularization (L2 reg) later
+    return -elbo
+end
+
+
+function elbo(model::LatentODE, x::Matrix{Float32}, t::Vector{Float32})
+    tspan = (t[1], t[end])
+    μ, logσ = model.vae.encoder(x)
+    z₀ = μ .+ randn(Float32, size(μ)...) .* exp.(logσ)
+    node = NeuralODE(model.dzdt, tspan; saveat=t)
+    sol = node(z₀)
+    x̂ = model.vae.decoder(Flux.stack(sol.u, 2))
+    logp_x_z = -sum(logitbinarycrossentropy.(x̂, x))
+    kl_q_p = 0.5 * sum(exp.(logσ) .+ μ.^2 .- logσ .- 1)
+    elbo = logp_x_z - model.β * kl_q_p
     return -elbo
 end

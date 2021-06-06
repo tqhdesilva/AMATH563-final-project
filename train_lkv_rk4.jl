@@ -19,7 +19,6 @@ lkv_train_tuple = (
 )
 
 train_loader = DataLoader(lkv_train_tuple; batchsize=16, shuffle=true)
-test_loader = DataLoader(lkv_train_samples; batchsize=64, shuffle=false)
 
 ## Train rk4 model to learn lkv params
 est_params = rand(4)
