@@ -1,5 +1,5 @@
 ## Create datasets, loaders
-using CUDA, Flux, Plots, Statistics
+using Flux, Plots, Statistics
 using Flux.Optimise:update!
 using Flux.Data:DataLoader
 
