@@ -34,21 +34,24 @@ lkv_train_tuple = (
 train_loader = DataLoader(lkv_train_tuple; batchsize=8, shuffle=true)
 
 θ = Flux.params(lode.dzdt, lode.vae.encoder.rnn_network, lode.vae.decoder.network)
-opt = ADAM(5e-5)
-# TODO log the loss each epoch
-for i in 1:100
+opt = ADAM(1e-5)
+for i in 1:800
     display("[Epoch $(i)]")
+    epoch_loss = 0
     for (x, t) in train_loader
         (x, t) = (x, t)
         grad = gradient(θ) do
             batchsize = size(t)[end]
             elbo_losses = [elbo(lode, x[:, :, i], t[:, i]) for i in 1:batchsize]
+            elbo_losses = elbo(lode, x, t)
             loss = mean(elbo_losses)
             # TODO should we add reg?
+            epoch_loss += loss * batchsize / length(train_loader)
             return loss
         end
         update!(opt, θ, grad)
     end
+    display("Loss: $(epoch_loss)")
 end
 
 lode = lode |> cpu
@@ -59,6 +62,6 @@ lode_sol = lode(
     (0, 100)
 )
 
-plot(
+p = plot(
     LinRange(0, 100, 500), Flux.stack(lode_sol.(LinRange(0, 100, 500)), 1)
 )

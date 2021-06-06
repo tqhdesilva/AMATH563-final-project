@@ -23,6 +23,16 @@ function (e::Encoder)(x::AbstractArray{Float32,2})
     return μ, logσ
 end
 
+function (e::Encoder)(x::AbstractArray{Float32,3})
+    # x is matrix of xdim x tsteps
+    x = reverse(Flux.unstack(x, 2))
+    Flux.reset!(e.rnn_network)
+    out = e.rnn_network.(x)[end] # 2 * zdim
+    μ = out[1:e.zdim, :]
+    logσ = out[e.zdim + 1:end, :]
+    return μ, logσ
+end
+
 
 function (e::Encoder)(x::Array{Float32,3})
     # x is a array of xdim x tsteps x batchsize
@@ -48,7 +58,7 @@ function new_decoder(zdim::Int, xdim::Int)
     return Decoder(network)
 end
 
-function (d::Decoder)(z::Union{AbstractArray{Float32,1},AbstractArray{Float32,2}})
+function (d::Decoder)(z::Union{AbstractArray{Float32,2},AbstractArray{Float32,3},AbstractArray{Float32,3}})
     return d.network(z)
 end
 
@@ -121,6 +131,23 @@ function elbo(model::LatentODE, x::AbstractArray{Float32,2}, t::AbstractArray{Fl
     x̂ = model.vae.decoder(Flux.stack(sol.u, 2))
     logp_x_z = -sum(logitbinarycrossentropy.(x̂, x))
     kl_q_p = 0.5 * sum(exp.(logσ) .+ μ.^2 .- logσ .- 1)
+    elbo = logp_x_z - model.β * kl_q_p
+    return -elbo
+end
+
+function elbo(model::LatentODE, x::AbstractArray{Float32,3}, t::AbstractArray{Float32,2})
+    batchsize = size(t)[end]
+    μ, logσ = model.vae.encoder(x)
+    noise = randn(Float32, size(μ)...)
+    if isa(x, CUDA.CuArray)
+        noise = noise |> gpu
+    end
+    z₀ = μ .+ noise .* exp.(logσ) # TODO send this to gpu when necessary
+    nodes = [NeuralODE(model.dzdt, (t[1, i], t[end, i]); saveat=t[:, i]) for i in 1:batchsize]
+    sols = [nodes[i](z₀[:, i]) for i in 1:batchsize]
+    x̂ = model.vae.decoder(Flux.stack([Flux.stack(sol.u, 2) for sol in sols], 3))
+    logp_x_z = -sum(logitbinarycrossentropy.(x̂, x)) / batchsize
+    kl_q_p = 0.5 * sum(exp.(logσ) .+ μ.^2 .- logσ .- 1) / batchsize
     elbo = logp_x_z - model.β * kl_q_p
     return -elbo
 end
