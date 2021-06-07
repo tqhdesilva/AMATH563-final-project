@@ -6,62 +6,34 @@ include("lkv.jl")
 include("latent_ode.jl")
 
 
-lode = new_latent_ode(2, 16, 8)
-
 lkv_ic = [0.8, 0.4]
 true_params = [1.1, 0.4, 0.1, 0.4]
-lkv_train_samples = sample_lotka_volterra(lkv_ic, 500, 100, true_params...; train=true)
-lkv_test_samples = sample_lotka_volterra(lkv_ic, 500, 100, true_params...)
-nsamples = 32
+lkv_train_sol = sample_lotka_volterra(lkv_ic, 20, 5, true_params...; train=true)
+lkv_test_sol = sample_lotka_volterra(lkv_ic, 500, 100, true_params...)
 
-lkv_train_tuple = (
-    Float32.(Flux.stack(
-        [
-            Flux.stack(lkv_train_samples.u[i:i - 1 + nsamples], 2)
-            for i in 1:length(lkv_train_samples) + 1 - nsamples
-        ],
-        3
-    )), # 2 x 16 x numsamples
-    Float32.(Flux.stack(
-        [
-            lkv_train_samples.t[i:i - 1 + nsamples]
-            for i in 1:length(lkv_train_samples.t) + 1 - nsamples
-        ],
-        2
-    ))
-)
+dzdt = Chain(Dense(2, 64, sigmoid), Dense(64, 2))
+tspan = (0.0, 5.0)
+z = Array(lkv_train_sol)
+t = lkv_train_sol.t
+z₀ = z[:, 1]
+n_ode = NeuralODE(dzdt, tspan, saveat=t, reltol=1e-7, abstol=1e-9)
+predict_n_ode() = n_ode(z₀)
+loss_n_ode() = sum((z .- predict_n_ode()).^2)
 
-train_loader = DataLoader(lkv_train_tuple; batchsize=8, shuffle=true)
 
-θ = Flux.params(lode.dzdt, lode.vae.encoder.rnn_network, lode.vae.decoder.network)
-opt = ADAM(1e-5)
-for i in 1:800
-    display("[Epoch $(i)]")
-    epoch_loss = 0
-    for (x, t) in train_loader
-        (x, t) = (x, t)
-        grad = gradient(θ) do
-            batchsize = size(t)[end]
-            elbo_losses = [elbo(lode, x[:, :, i], t[:, i]) for i in 1:batchsize]
-            elbo_losses = elbo(lode, x, t)
-            loss = mean(elbo_losses)
-            # TODO should we add reg?
-            epoch_loss += loss * batchsize / length(train_loader)
-            return loss
-        end
-        update!(opt, θ, grad)
-    end
-    display("Loss: $(epoch_loss)")
+data = Iterators.repeated((), 1000)
+opt = ADAM(0.1)
+cb = function () # callback function to observe training
+    display(loss_n_ode())
+    # plot current prediction against data
+    cur_pred = predict_n_ode()
+    pl = scatter(t, z[1,:], label="data")
+    scatter!(pl, t, cur_pred[1,:], label="prediction")
+    display(plot(pl))
 end
 
-lode = lode |> cpu
+# Display the ODE with the initial parameter values.
+cb()
 
-lode_sol = lode(
-    Float32.(Flux.stack(lkv_train_samples.u, 2)),
-    Float32.(lkv_train_samples.t),
-    (0, 100)
-)
-
-p = plot(
-    LinRange(0, 100, 500), Flux.stack(lode_sol.(LinRange(0, 100, 500)), 1)
-)
+ps = Flux.params(n_ode)
+Flux.train!(loss_n_ode, ps, data, opt, cb=cb)
