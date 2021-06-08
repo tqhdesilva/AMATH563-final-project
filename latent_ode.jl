@@ -119,6 +119,7 @@ end
 
 
 function elbo(model::LatentODE, x::AbstractArray{Float32,2}, t::AbstractArray{Float32,1})
+    # TODO maybe try MSE reconstruction loss?
     tspan = (t[1], t[end])
     μ, logσ = model.vae.encoder(x)
     noise = randn(Float32, size(μ)...)

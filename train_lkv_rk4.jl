@@ -64,7 +64,8 @@ plot!(
     p1,
     lkv_test_samples.t,
     transpose(lkv_test_samples),
-    label=["actual x₁" "actual x₂"]
+    label=["actual x₁" "actual x₂"],
+    linewidth=2
 )
 lkv_est_samples = sample_lotka_volterra(lkv_ic, 500, 100, est_params...)
 plot!(
@@ -76,9 +77,9 @@ plot!(
 
 ## Train rk4 with fully connected network
 fc = Chain(
-    Dense(2, 16, relu),
-    Dense(16, 32, relu),
-    Dense(32, 16, relu),
+    Dense(2, 32, relu),
+    Dense(32, 64, relu),
+    Dense(64, 16, relu),
     Dense(16, 2)
 )
 θ = params(fc)
@@ -88,6 +89,7 @@ opt = ADAMW(0.0001)
 predict(t, x) = rk4(f, t, x)
 
 function train!(loader)
+    Flux.testmode!(fc, false)
     for (x₀, y, T) in loader
         t = hcat(LinRange.(0, T, 100)...)
         grad = gradient(θ) do 
@@ -112,7 +114,8 @@ plot!(
     p1,
     lkv_test_samples.t,
     transpose(lkv_test_samples),
-    label=["actual x₁" "actual x₂"]
+    label=["actual x₁" "actual x₂"],
+    linewidth=2
 )
 
 function nn_lotka_volterra!(dx, x, p, t)
@@ -120,6 +123,7 @@ function nn_lotka_volterra!(dx, x, p, t)
 end
 
 function sample_nn_lotka_volterra(x₀, n, T)
+    Flux.testmode!(fc, true)
     sample_points = LinRange(0, T, n)
     tspan = (0.0, T)
     prob = ODEProblem(nn_lotka_volterra!, x₀, tspan, undef)
