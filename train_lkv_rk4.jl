@@ -25,13 +25,17 @@ est_params = rand(4)
 println(est_params)
 θ = Flux.params(est_params)
 
-f(x, α, β, δ, γ) = hcat(
+function f′(x, p)
+    α, β, δ, γ = p
+    return hcat(
     α .* x[:, 1] .- β .* x[:, 1] .* x[:, 2],
     δ .* x[:, 1] .* x[:, 2] .- γ .* x[:, 2]
 )
+end
 
-# maybe the arg expansion somehow forces grad to return tuple?
-f(t, x) = f(x, est_params...)
+# Varargs does not work when currying
+# Grad returns a tuple
+f(t, x) = f′(x, est_params)
 
 opt = Descent(0.0001)
 predict(t, x) = rk4(f, t, x)
@@ -44,10 +48,7 @@ for i in 1:800
             loss = Flux.Losses.mse(predict(t, x₀), y)
             return loss
         end
-        for p in θ
-            # TODO figure out why grad[est_params] is a tuple
-            update!(opt, p, [grad[p]...])
-        end
+        update!(opt, θ, grad)
     end
 end
 
