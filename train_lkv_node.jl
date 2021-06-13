@@ -25,7 +25,7 @@ dzdt = FastChain(
 )
 p_init = initial_params(dzdt)
 
-opt = ADAM(0.01)
+opt = ADAM(0.005)
 ode_problem = ODEProblem((u, p, t) -> dzdt(u, p), [0.0, 0.0], (0.0, 100.0), p_init)
 groupsize = 5
 continuity_term = 200
@@ -66,9 +66,6 @@ function loss_multiple_shooting(p)
 end
 
 res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, p_init, opt; cb=callback, maxiters=400)
-res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, res_ms.minimizer,
-                                BFGS(), cb=callback, maxiters=200,
-                                allow_f_increases=true)
 
 gif(anim, "output/multiple_shooting.gif", fps=15)
 
