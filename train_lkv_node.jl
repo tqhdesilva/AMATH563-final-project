@@ -8,6 +8,8 @@ using DiffEqFlux:group_ranges
 include("lkv.jl")
 include("latent_ode.jl")
 
+ENV["GKSwstype"] = "nul" # don't display each plot for animation
+
 ##
 datasize = 500
 lkv_ic = [0.8, 0.4]
@@ -21,13 +23,14 @@ tsteps = lkv_train_sol.t
 ##
 dzdt = FastChain(
     FastDense(2, 64, tanh),
+    FastDense(64, 64, tanh),
     FastDense(64, 2)
 )
 p_init = initial_params(dzdt)
 
-opt = ADAM(0.005)
+opt = ADAM(0.001)
 ode_problem = ODEProblem((u, p, t) -> dzdt(u, p), [0.0, 0.0], (0.0, 100.0), p_init)
-groupsize = 5
+groupsize = 20
 continuity_term = 200
 
 anim = Animation()
@@ -42,7 +45,7 @@ function plot_multiple_shoot(plt, preds, group_size)
 end
 
 callback = function (p, l, preds; doplot=true)
-    display(l)
+    println(l)
     if doplot
         # plot the original data
         plt = scatter(tsteps, lkv_train_data[1,:], label="Data")
@@ -51,7 +54,6 @@ callback = function (p, l, preds; doplot=true)
         plot_multiple_shoot(plt, preds, groupsize)
 
         frame(anim)
-        display(plot(plt))
     end
     return false
 end
@@ -73,3 +75,4 @@ gif(anim, "output/multiple_shooting.gif", fps=15)
 est_solution = solve(ode_problem; u₀=lkv_test_sol[:, 30], saveat=lkv_test_sol.t, p=res_ms.minimizer)
 plt = plot(est_solution.t, est_solution', labels=["estimated x₁" "estimated x₂"])
 plot!(lkv_test_sol.t, lkv_test_sol', labels=["actual x₁" "actual x₂"])
+savefig(plt, "output/lkv_multiple_shoot.png")
