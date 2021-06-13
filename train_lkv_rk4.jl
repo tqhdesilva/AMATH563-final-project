@@ -97,7 +97,6 @@ function train!(loader)
             loss = Flux.Losses.mse(predict(t, x₀), y)
             return loss
         end
-        # TODO this time it's all matrix/arrays...
         update!(opt, θ, grad)
     end
 end
