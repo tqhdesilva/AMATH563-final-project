@@ -18,21 +18,6 @@ lkv_test_sol = sample_lotka_volterra(lkv_ic, datasize, 100, true_params...)
 lkv_train_data = Array(lkv_train_sol)
 tsteps = lkv_train_sol.t
 
-# ##
-# seqlen = 20
-# train_loader = DataLoader(
-#     (
-#         [
-#             lkv_train_sol[:, i:i - 1 + seqlen]
-#             for i in 1:length(lkv_train_sol) + 1 - seqlen
-#         ],
-#         [
-#             lkv_train_sol.t[i:i - 1 + seqlen]
-#             for i in 1:length(lkv_train_sol) + 1 - seqlen
-#         ]
-#     ),
-#     batchsize=8
-# )
 ##
 dzdt = FastChain(
     FastDense(2, 64, tanh),
@@ -80,9 +65,9 @@ function loss_multiple_shooting(p)
                           groupsize; continuity_term)
 end
 
-res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, p_init, opt; cb=callback, maxiters=300)
+res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, p_init, opt; cb=callback, maxiters=400)
 res_ms = DiffEqFlux.sciml_train(loss_multiple_shooting, res_ms.minimizer,
-                                BFGS(), cb=callback, maxiters=100,
+                                BFGS(), cb=callback, maxiters=200,
                                 allow_f_increases=true)
 
 gif(anim, "output/multiple_shooting.gif", fps=15)
