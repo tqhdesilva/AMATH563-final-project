@@ -75,6 +75,7 @@ plot!(
     transpose(lkv_est_samples),
     label=["estimated x₁" "estimated x₂"]
 )
+savefig(p1, "output/lkv_model_lkv_equation.png")
 
 ## Train rk4 with fully connected network
 fc = Chain(
@@ -137,3 +138,4 @@ plot!(
     transpose(lkv_est_samples),
     label=["estimated x₁" "estimated x₂"]
 )
+savefig(p1, "output/lkv_model_nn.png")
